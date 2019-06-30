@@ -52,6 +52,21 @@ type
   TFrameList = class(TList<Integer>);
   TResTypeFilter = set of TResTypeEnum;
 
+  TCircle = class(FMX.Objects.TCircle)
+  private
+    FSelectable : Boolean;
+    FSelected : Boolean;
+    FAvailable : Boolean;
+    procedure SetAvailable(const Value: Boolean);
+    procedure SetSelected(const Value: Boolean);
+  public
+    property Selectable: Boolean read FSelectable;
+    property Selected: Boolean read FSelected write SetSelected;
+    property Available: Boolean read FAvailable write SetAvailable;
+    constructor Create(AOwner: TComponent); override;
+    destructor Destroy; override;
+  end;
+
   TPOXObject = class
     ObjectName: string;
     ObjectResType: TResTypeEnum;
@@ -183,6 +198,7 @@ type
     procedure updateLayers;
     procedure updatePOXLV;
     procedure ClearBMPList;
+    procedure UpdateBMPListBasedonVisibleLayers;
   public
     { Public declarations }
     function LoadPOXFile(filename: string): Boolean;
@@ -348,15 +364,17 @@ end;
 procedure TfrmMain.layerClick(Sender: TObject);
 var
   layerMarker: TCircle;
+  running: Boolean;
 begin
-  if currentResType = LC then
-  begin
-    layerMarker := TCircle(Sender);
-    if layerMarker.Fill.Kind = TBrushKind.Solid then
-      layerMarker.Fill.Kind := TBrushKind.None
-    else
-      layerMarker.Fill.Kind := TBrushKind.Solid;
-  end;
+  layerMarker := TCircle(Sender);
+  if layerMarker.Selectable then
+    layerMarker.Selected := not layerMarker.Selected;
+  running := playFrames.Running;
+  if running then
+    playFrames.StopAtCurrent;
+  UpdateBMPListBasedonVisibleLayers;
+  if running then
+    playFrames.Start;
 end;
 
 function TfrmMain.LoadPOXFile(filename: string): Boolean;
@@ -371,7 +389,6 @@ var
   L : LongWord;
   bitmap : TBitmap;
   s: TSizeF;
-  LayersPath: string;
 begin
   Result := False;
   tkbFrames.Value := 0;
@@ -436,56 +453,6 @@ begin
       FreeMem(lpRLE);
     end;
 
-    if currentResType = LC then
-    begin
-      // load naked - and rest in a TObjectlist<TLayerEnum, TBmpList>
-      //
-      if layersSL.Values['naked']<>'' then
-      begin
-        ClearBMPList;
-        LayersFromFile(TPath.ChangeExtension(ArtLibPath+LayeredRelativePath+layersSL.Values['naked'], 'pox'), true, bmpList);
-        LayersPath := ExtractFilePath(ArtLibPath+LayeredRelativePath+layersSL.Values['naked']);
-        // Add BMPLIst to ObjectList ....
-        if (layersSL.Values['head']<>'') then
-          LayersFromFile(TPath.ChangeExtension(ArtLibPath+LayeredRelativePath+layersSL.Values['head'], 'pox'), false, bmpList);
-        if (layersSL.Values['helmet']<>'') then
-          LayersFromFile(TPath.ChangeExtension(LayersPath+layersSL.Values['helmet'], 'pox'), false, bmpList);
-        if (layersSL.Values['chest1']<>'') then
-          LayersFromFile(TPath.ChangeExtension(LayersPath+layersSL.Values['chest1'], 'pox'), false, bmpList);
-        if (layersSL.Values['chest2']<>'') then
-          LayersFromFile(TPath.ChangeExtension(LayersPath+layersSL.Values['chest2'], 'pox'), false, bmpList);
-        if (layersSL.Values['chest3']<>'') then
-          LayersFromFile(TPath.ChangeExtension(LayersPath+layersSL.Values['chest3'], 'pox'), false, bmpList);
-        if (layersSL.Values['leg1']<>'') then
-          LayersFromFile(TPath.ChangeExtension(LayersPath+layersSL.Values['leg1'], 'pox'), false, bmpList);
-        if (layersSL.Values['leg2']<>'') then
-          LayersFromFile(TPath.ChangeExtension(LayersPath+layersSL.Values['leg2'], 'pox'), false, bmpList);
-        if (layersSL.Values['feet']<>'') then
-          LayersFromFile(TPath.ChangeExtension(LayersPath+layersSL.Values['feet'], 'pox'), false, bmpList);
-        if (layersSL.Values['boot']<>'') then
-          LayersFromFile(TPath.ChangeExtension(LayersPath+layersSL.Values['boot'], 'pox'), false, bmpList);
-        if (layersSL.Values['outer']<>'') then
-          LayersFromFile(TPath.ChangeExtension(LayersPath+layersSL.Values['outer'], 'pox'), false, bmpList);
-        if (layersSL.Values['belt']<>'') then
-          LayersFromFile(TPath.ChangeExtension(LayersPath+layersSL.Values['belt'], 'pox'), false, bmpList);
-        if (layersSL.Values['arm']<>'') then
-          LayersFromFile(TPath.ChangeExtension(LayersPath+layersSL.Values['arm'], 'pox'), false, bmpList);
-        if (layersSL.Values['gauntlet']<>'') then
-          LayersFromFile(TPath.ChangeExtension(LayersPath+layersSL.Values['gauntlet'], 'pox'), false, bmpList);
-        if (layersSL.Values['misc1']<>'') then
-          LayersFromFile(TPath.ChangeExtension(LayersPath+layersSL.Values['misc1'], 'pox'), false, bmpList);
-        if (layersSL.Values['misc2']<>'') then
-          LayersFromFile(TPath.ChangeExtension(LayersPath+layersSL.Values['misc2'], 'pox'), false, bmpList);
-        if (layersSL.Values['misc3']<>'') then
-          LayersFromFile(TPath.ChangeExtension(LayersPath+layersSL.Values['misc3'], 'pox'), false, bmpList);
-        if (layersSL.Values['weapon']<>'') then
-          LayersFromFile(TPath.ChangeExtension(LayersPath+layersSL.Values['weapon'], 'pox'), false, bmpList);
-        if (layersSL.Values['shield']<>'') then
-          LayersFromFile(TPath.ChangeExtension(LayersPath+layersSL.Values['shield'], 'pox'), false, bmpList);
-      end;
-      // UpdateBMPListBasedonVisibleLayers call.
-    end;
-
   finally
     f.Free;
   end;
@@ -509,20 +476,19 @@ begin
   movements.Clear;
 
   LoadPOXFile(ArtLibPath+AItem.Detail);
+  updActions;
+  updDirections;
+  updateLayers;
+  UpdateBMPListBasedonVisibleLayers;
   if bmpList.Count>0 then // LC
     imgRLE.Bitmap := bmpList[0]
   else
     imgRLE.Bitmap := nil;
-  updActions;
-  updDirections;
-  updateLayers;
   btnExport.Enabled := True;
   if (currentResType = II) then
     tkbFrames.Max := bmpList.Count-1;
   if (currentResType = LL) or (currentResType = LC) then
   begin
-//    SetLayers LC: Opacity/ LL: Hide/Show
-//    expLayers.IsExpanded := True;
     expLayers.Enabled := True;
   end
   else
@@ -640,14 +606,11 @@ end;
 
 procedure TfrmMain.sbPauseClick(Sender: TObject);
 begin
-  playFrames.Stop;
+  playFrames.StopAtCurrent;
 end;
 
 procedure TfrmMain.sbPlayClick(Sender: TObject);
 begin
-  playFrames.StartValue := 0;
-  playFrames.StopValue := tkbFrames.Max;
-  playFrames.Duration := tkbFrames.Max * 0.1 * frameMultiplier; // 100 msec per frame
   playFrames.Start;
 end;
 
@@ -684,104 +647,123 @@ begin
   end;
 end;
 
+procedure TfrmMain.UpdateBMPListBasedonVisibleLayers;
+var
+  LayersPath: string;
+begin
+  if currentResType = LC then
+  begin
+    // load naked - and rest in a TObjectlist<TLayerEnum, TBmpList>
+    //
+    if layersSL.Values['naked']<>'' then
+    begin
+      ClearBMPList;
+      LayersFromFile(TPath.ChangeExtension(ArtLibPath+LayeredRelativePath+layersSL.Values['naked'], 'pox'), true, bmpList);
+      LayersPath := ExtractFilePath(ArtLibPath+LayeredRelativePath+layersSL.Values['naked']);
+      // Add BMPLIst to ObjectList ....
+      if (layersSL.Values['head']<>'') then
+        LayersFromFile(TPath.ChangeExtension(ArtLibPath+LayeredRelativePath+layersSL.Values['head'], 'pox'), false, bmpList);
+      if (layersSL.Values['feet']<>'') then
+        LayersFromFile(TPath.ChangeExtension(LayersPath+layersSL.Values['feet'], 'pox'), false, bmpList);
+
+      if (layersSL.Values['helmet']<>'') and layHead.Selected then
+        LayersFromFile(TPath.ChangeExtension(LayersPath+layersSL.Values['helmet'], 'pox'), false, bmpList);
+      if (layersSL.Values['chest1']<>'') and layChest1.Selected then
+        LayersFromFile(TPath.ChangeExtension(LayersPath+layersSL.Values['chest1'], 'pox'), false, bmpList);
+      if (layersSL.Values['chest2']<>'') and layChest2.Selected then
+        LayersFromFile(TPath.ChangeExtension(LayersPath+layersSL.Values['chest2'], 'pox'), false, bmpList);
+      if (layersSL.Values['chest3']<>'') and layChest3.Selected then
+        LayersFromFile(TPath.ChangeExtension(LayersPath+layersSL.Values['chest3'], 'pox'), false, bmpList);
+      if (layersSL.Values['leg1']<>'') and layLeg1.Selected then
+        LayersFromFile(TPath.ChangeExtension(LayersPath+layersSL.Values['leg1'], 'pox'), false, bmpList);
+      if (layersSL.Values['leg2']<>'') and layLeg2.Selected then
+        LayersFromFile(TPath.ChangeExtension(LayersPath+layersSL.Values['leg2'], 'pox'), false, bmpList);
+      if (layersSL.Values['boot']<>'') and layFeet.Selected then
+        LayersFromFile(TPath.ChangeExtension(LayersPath+layersSL.Values['boot'], 'pox'), false, bmpList);
+      if (layersSL.Values['outer']<>'') and layOuter.Selected then
+        LayersFromFile(TPath.ChangeExtension(LayersPath+layersSL.Values['outer'], 'pox'), false, bmpList);
+      if (layersSL.Values['belt']<>'') and layBelt.Selected then
+        LayersFromFile(TPath.ChangeExtension(LayersPath+layersSL.Values['belt'], 'pox'), false, bmpList);
+      if (layersSL.Values['arm']<>'') and layArm.Selected then
+        LayersFromFile(TPath.ChangeExtension(LayersPath+layersSL.Values['arm'], 'pox'), false, bmpList);
+      if (layersSL.Values['gauntlet']<>'') and layGauntlet.Selected then
+        LayersFromFile(TPath.ChangeExtension(LayersPath+layersSL.Values['gauntlet'], 'pox'), false, bmpList);
+      if (layersSL.Values['misc1']<>'') and layMisc1.Selected then
+        LayersFromFile(TPath.ChangeExtension(LayersPath+layersSL.Values['misc1'], 'pox'), false, bmpList);
+      if (layersSL.Values['misc2']<>'') and layMisc2.Selected then
+        LayersFromFile(TPath.ChangeExtension(LayersPath+layersSL.Values['misc2'], 'pox'), false, bmpList);
+      if (layersSL.Values['misc3']<>'') and layMisc3.Selected then
+        LayersFromFile(TPath.ChangeExtension(LayersPath+layersSL.Values['misc3'], 'pox'), false, bmpList);
+      if (layersSL.Values['weapon']<>'') and layWeapon.Selected then
+        LayersFromFile(TPath.ChangeExtension(LayersPath+layersSL.Values['weapon'], 'pox'), false, bmpList);
+      if (layersSL.Values['shield']<>'') and layShield.Selected then
+        LayersFromFile(TPath.ChangeExtension(LayersPath+layersSL.Values['shield'], 'pox'), false, bmpList);
+    end;
+  end;
+end;
+
 procedure TfrmMain.updateLayers;
 begin
-  layHead.Visible := False;
-  layChest1.Visible := False;
-  layChest2.Visible := False;
-  layChest3.Visible := False;
-  layLeg1.Visible := False;
-  layLeg2.Visible := False;
-  layFeet.Visible := False;
-  layOuter.Visible := False;
-  layBelt.Visible := False;
-  layArm.Visible := False;
-  layGauntlet.Visible := False;
-  layMisc1.Visible := False;
-  layMisc2.Visible := False;
-  layMisc3.Visible := False;
-  layWeapon.Visible := False;
-  layShield.Visible := False;
+  layHead.Available := False;
+  layChest1.Available := False;
+  layChest2.Available := False;
+  layChest3.Available := False;
+  layLeg1.Available := False;
+  layLeg2.Available := False;
+  layFeet.Available := False;
+  layOuter.Available := False;
+  layBelt.Available := False;
+  layArm.Available := False;
+  layGauntlet.Available := False;
+  layMisc1.Available := False;
+  layMisc2.Available := False;
+  layMisc3.Available := False;
+  layWeapon.Available := False;
+  layShield.Available := False;
 
-  layHead.Fill.Kind := TBrushKind.Solid;
-  layChest1.Fill.Kind := TBrushKind.Solid;
-  layChest2.Fill.Kind := TBrushKind.Solid;
-  layChest3.Fill.Kind := TBrushKind.Solid;
-  layLeg1.Fill.Kind := TBrushKind.Solid;
-  layLeg2.Fill.Kind := TBrushKind.Solid;
-  layFeet.Fill.Kind := TBrushKind.Solid;
-  layOuter.Fill.Kind := TBrushKind.Solid;
-  layBelt.Fill.Kind := TBrushKind.Solid;
-  layArm.Fill.Kind := TBrushKind.Solid;
-  layGauntlet.Fill.Kind := TBrushKind.Solid;
-  layMisc1.Fill.Kind := TBrushKind.Solid;
-  layMisc2.Fill.Kind := TBrushKind.Solid;
-  layMisc3.Fill.Kind := TBrushKind.Solid;
-  layWeapon.Fill.Kind := TBrushKind.Solid;
-  layShield.Fill.Kind := TBrushKind.Solid;
-  //TODO: Refactor
   if currentResType=LL then  // Show - where can be used - but no handler.
   begin
-    if ContainsText(validLayers, 'head') then
-      layHead.Visible := True;
-    if ContainsText(validLayers, 'helmet') then
-      layHead.Visible := True;
-    if ContainsText(validLayers, 'chest1') then
-      layChest1.Visible := True;
-    if ContainsText(validLayers, 'chest2') then
-      layChest2.Visible := True;
-    if ContainsText(validLayers, 'chest3') then
-      layChest3.Visible := True;
-    if ContainsText(validLayers, 'leg1') then
-      layLeg1.Visible := True;
-    if ContainsText(validLayers, 'leg2') then
-      layLeg2.Visible := True;
-    if ContainsText(validLayers, 'feet') then
-      layFeet.Visible := True;
-    if ContainsText(validLayers, 'boot') then
-      layFeet.Visible := True;
-    if ContainsText(validLayers, 'outer') then
-      layOuter.Visible := True;
-    if ContainsText(validLayers, 'belt') then
-      layBelt.Visible := True;
-    if ContainsText(validLayers, 'arm') then
-      layArm.Visible := True;
-    if ContainsText(validLayers, 'gauntlet') then
-      layGauntlet.Visible := True;
-    if ContainsText(validLayers, 'misc1') then
-      layMisc1.Visible := True;
-    if ContainsText(validLayers, 'misc2') then
-      layMisc2.Visible := True;
-    if ContainsText(validLayers, 'misc3') then
-      layMisc3.Visible := True;
-    if ContainsText(validLayers, 'weapon') then
-      layWeapon.Visible := True;
-    if ContainsText(validLayers, 'shield') then
-      layShield.Visible := True;
-//    if ContainsText(validLayers, 'tabar') then
-//      layTabar.Visible := True;
+    layHead.Available := ContainsText(validLayers, 'head');
+    layHead.Available := ContainsText(validLayers, 'helmet');
+    layChest1.Available := ContainsText(validLayers, 'chest1');
+    layChest2.Available := ContainsText(validLayers, 'chest2');
+    layChest3.Available := ContainsText(validLayers, 'chest3');
+    layLeg1.Available := ContainsText(validLayers, 'leg1');
+    layLeg2.Available := ContainsText(validLayers, 'leg2');
+    layFeet.Available := ContainsText(validLayers, 'feet');
+    layFeet.Available := ContainsText(validLayers, 'boot');
+    layOuter.Available := ContainsText(validLayers, 'outer');
+    layBelt.Available := ContainsText(validLayers, 'belt');
+    layArm.Available := ContainsText(validLayers, 'arm');
+    layGauntlet.Available := ContainsText(validLayers, 'gauntlet');
+    layMisc1.Available := ContainsText(validLayers, 'misc1');
+    layMisc2.Available := ContainsText(validLayers, 'misc2');
+    layMisc3.Available := ContainsText(validLayers, 'misc3');
+    layWeapon.Available := ContainsText(validLayers, 'weapon');
+    layShield.Available := ContainsText(validLayers, 'shield');
+//    layTabar.Visible := ContainsText(validLayers, 'tabar');
   end;
   if currentResType=LC then  // Toggle Opacity
   begin
     // layers has a value = visible
-    layHead.Visible := layersSL.Values['head']<>'';
-    layHead.Visible := layersSL.Values['helmet']<>'';
-    layChest1.Visible := layersSL.Values['chest1']<>'';
-    layChest2.Visible := layersSL.Values['chest2']<>'';
-    layChest3.Visible := layersSL.Values['chest3']<>'';
-    layLeg1.Visible := layersSL.Values['leg1']<>'';
-    layLeg2.Visible := layersSL.Values['leg2']<>'';
-    layFeet.Visible := layersSL.Values['feet']<>'';
-    layFeet.Visible := layersSL.Values['boot']<>'';
-    layOuter.Visible := layersSL.Values['outer']<>'';
-    layBelt.Visible := layersSL.Values['belt']<>'';
-    layArm.Visible := layersSL.Values['arm']<>'';
-    layGauntlet.Visible := layersSL.Values['gauntlet']<>'';
-    layMisc1.Visible := layersSL.Values['misc1']<>'';
-    layMisc2.Visible := layersSL.Values['misc2']<>'';
-    layMisc3.Visible := layersSL.Values['misc3']<>'';
-    layWeapon.Visible := layersSL.Values['weapon']<>'';
-    layShield.Visible := layersSL.Values['shield']<>'';
+//    layHead.Available := layersSL.Values['head']<>'';
+    layHead.Selected := layersSL.Values['helmet']<>'';
+    layChest1.Selected := layersSL.Values['chest1']<>'';
+    layChest2.Selected := layersSL.Values['chest2']<>'';
+    layChest3.Selected := layersSL.Values['chest3']<>'';
+    layLeg1.Selected := layersSL.Values['leg1']<>'';
+    layLeg2.Selected := layersSL.Values['leg2']<>'';
+//    layFeet.Available := layersSL.Values['feet']<>'';
+    layFeet.Selected := layersSL.Values['boot']<>'';
+    layOuter.Selected := layersSL.Values['outer']<>'';
+    layBelt.Selected := layersSL.Values['belt']<>'';
+    layArm.Selected := layersSL.Values['arm']<>'';
+    layGauntlet.Selected := layersSL.Values['gauntlet']<>'';
+    layMisc1.Selected := layersSL.Values['misc1']<>'';
+    layMisc2.Selected := layersSL.Values['misc2']<>'';
+    layMisc3.Selected := layersSL.Values['misc3']<>'';
+    layWeapon.Selected := layersSL.Values['weapon']<>'';
+    layShield.Selected := layersSL.Values['shield']<>'';
 //    layTabar.Visible := layersSL.Values['tabar']<>'';
   end;
 end;
@@ -826,6 +808,9 @@ begin
     tkbFrames.Max := tkbFrames.Min;
     imgRLE.Bitmap := bmpList[0];
   end;
+  playFrames.StartValue := 0;
+  playFrames.StopValue := tkbFrames.Max;
+  playFrames.Duration := tkbFrames.Max * 0.1 * frameMultiplier; // 100 msec per frame
   sbPlay.Enabled := tkbFrames.Max <> tkbFrames.Min;
 end;
 
@@ -865,6 +850,42 @@ end;
 procedure TPOXObjectList.SetFilter(const Value: TResTypeFilter);
 begin
   FFilter := Value;
+end;
+
+{ TLayerCircle }
+
+constructor TCircle.Create(AOwner: TComponent);
+begin
+  inherited;
+end;
+
+destructor TCircle.Destroy;
+begin
+  inherited;
+end;
+
+procedure TCircle.SetAvailable(const Value: Boolean);
+begin
+  Visible := Value;
+  FAvailable := Value;
+  FSelectable := False;
+  Fill.Kind := TBrushKind.Solid;
+  Stroke.Kind := TBrushKind.None;
+end;
+
+procedure TCircle.SetSelected(const Value: Boolean);
+begin
+  FSelected := Value;
+  if FSelected then
+    Fill.Kind := TBrushKind.Solid
+  else
+    Fill.Kind := TBrushKind.None;
+  if Value and (not FAvailable) then
+  begin
+    Available := True;
+    Stroke.Kind := TBrushKind.Solid;
+  end;
+  FSelectable := True;
 end;
 
 end.

@@ -6,7 +6,8 @@ All notable changes to this project will be documented in this file.
 - Include POX save code.
 - Include Layers manipulation code.
 - Include new "Tabar" layer
-- Add support for action keywords - RANDOM, LOOP, STOP ...
+- Add support for LL:LayeredFramesToBack
+- Add support for action keywords - RANDOM, LOOP, END ...
 - Add support for trigger frame
 - Data validation - ini vs. rle data.
 - Ini data/property editors.
@@ -17,5 +18,5 @@ All notable changes to this project will be documented in this file.
 
 ## 2019-06-30
 ### Added
-- Initial commit of preliminary build - missing save code and layer manipulation done in experimental build
+- Initial commit of preliminary build - missing save code done in experimental build
 - Added assets, license and documentation
