@@ -84,6 +84,7 @@ type
   function ResTypeFromFile(filename: string): TResTypeEnum;
   function ResTypeFromStream(filestream: TBufferedFileStream): TResTypeEnum;
   procedure decodeRLE(rle: PRLEHDR; rleSize: integer; var bitmap: TBitmap);
+  procedure encodeRLE(bitmap: TBitmap; var rle: RLEHDR; var rleData: TMemoryStream);
   procedure LayersFromFile(filename: string; clear: boolean; var bmpList: TBMPList);
 
 implementation
@@ -119,8 +120,7 @@ begin
   Result := TRttiEnumerationType.GetValue<TResTypeEnum>(M);
 end;
 
-procedure decodeRLE(rle: PRLEHDR; rleSize: integer;
-  var bitmap: TBitmap);
+procedure decodeRLE(rle: PRLEHDR; rleSize: integer; var bitmap: TBitmap);
 var
   i, x, y : integer;
   c : byte;
@@ -170,6 +170,143 @@ begin
     FreeAndNil(rleData);
     bitmap.Unmap(bmpData);
   end;
+end;
+
+procedure encodeRLE(bitmap: TBitmap; var rle: RLEHDR; var rleData: TMemoryStream);
+var
+  colarray: TList<DWORD>;
+  casetyp: byte;
+  didColor: boolean;
+  x, y, i: Integer;
+  bmpData: TBitmapData;
+  transcount, oldx, currentrowlastx, rl : DWORD;
+  colorarray: string;
+  colour: word;
+  pxCol: TAlphaColorRec;
+
+  function ColorToBGR565(color: TAlphaColorRec): DWORD;
+  var
+    r, g, b: byte;
+  begin
+    r := color.R shr 3;
+    g := color.G shr 2;
+    b := color.B shr 3;
+    Result := (r shl 11)+(g shl 5)+b;
+  end;
+
+begin
+  rle.SrcX := 1; // Not used
+  rle.SrcY := 1; // Not used
+  rle.Wdh := 0; // Actually less than width+adjX
+  rle.Hgh := 0; // Actually less than height+adjY
+  rle.AdjX := MaxInt; //bitmap.Width; // Leftmost non-transparent pixel
+  rle.AdjY := MaxInt; //bitmap.Height; // Topmost non-transparent pixel
+  rle.PixFmt := 2; // BGR565?
+  rle.DataPtr := PChar(@rleData);
+
+  colarray := TList<DWORD>.Create;
+  try
+    x := 0;
+    y := 0;
+    if bitmap.Map(TMapAccess.Read, bmpData) then
+    begin
+      transcount := 0;
+      oldx := 0;
+      colorarray := '';
+      didColor := False;
+      {
+      case 1
+      color 2
+      countx 4
+      }
+      for y := 0 to bitmap.Height-1 do
+      begin
+        for x := 0 to bitmap.Width-1 do
+        begin
+          pxCol.Color := bmpData.GetPixel(x,y);
+          if pxCol.Color <> 0 then
+          begin
+            if rle.AdjX > x then rle.AdjX := x;
+            if rle.AdjY > y then rle.AdjY := y;
+          end;
+        end;
+      end;
+
+      for y := rle.AdjY to bitmap.Height-1 do
+      begin
+
+        for x := rle.adjX to bitmap.Width-1 do
+        begin
+          pxCol.Color := bmpData.GetPixel(x,y);
+          if pxCol.Color <> 0 then
+          begin
+            didColor := true;
+            if abs(transcount-oldx) > 0 then
+            begin
+//              two := (transcount-oldx);
+//              memINI.Lines.Add('#02#'+ two.ToString);
+              casetyp := $02;  // Adjust x
+              rl := trunc((transcount-oldx) shl 1);
+              rleData.Write(casetyp, 1);
+              rleData.Write(rl, 4);
+//              inc(rlesize, 5);
+              transcount := 0;
+              oldx := 0;
+            end;
+            colorarray := colorarray+'C';
+            colarray.Add(ColorToBGR565(pxCol)); // BGR565
+            currentrowlastx := x;
+          end
+          else
+          begin
+            if didColor then
+            begin
+              didColor := False;
+//              memINI.Lines.Add('#01#'+ intToStr(colorarray.Length)+colorarray);
+              casetyp := $01;
+              rl := colorarray.Length;
+              rleData.Write(casetyp, 1);
+              rleData.Write(rl, 4);
+              for I := 0 to rl-1 do
+              begin
+                colour := colarray[I];
+                rleData.Write(colour, 2);
+              end;
+//              inc(rlesize, 5+(colorarray.Length*2));
+              colorarray := '';
+              colarray.Clear;
+              if rle.Wdh<x then
+                rle.Wdh:=x;
+              if rle.Hgh < y then
+                rle.Hgh := y;
+            end;
+            inc(transcount)
+          end;
+
+        end;
+//        memINI.Lines.Add('#03#');
+//        inc(rlesize, 1);
+        casetyp := $03;
+        rleData.Write(casetyp, 1);
+
+        oldx := currentrowlastx;
+        transcount := 0;
+      end;
+      // w 18 (- 3) a1
+      // h 22 (- 2) a1
+
+      rle.Wdh := rle.Wdh - rle.AdjX;
+      rle.Hgh := rle.Hgh;
+
+      bitmap.Unmap(bmpData);
+      casetyp := $00;      // bitmap done
+      rleData.Write(casetyp, 1);
+    end;
+
+  finally
+    colarray.Free;
+  end;
+
 end;
 
 procedure LayersFromFile(filename: string; clear: boolean; var bmpList: TBMPList);

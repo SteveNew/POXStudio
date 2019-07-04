@@ -170,6 +170,7 @@ type
     procedure lvwPOXFilterItemClick(const Sender: TObject;
       const AItem: TListViewItem);
     procedure btnAboutClick(Sender: TObject);
+    procedure btnSaveClick(Sender: TObject);
   private
     { Private declarations }
     ArtLibPath: String;
@@ -202,6 +203,7 @@ type
   public
     { Public declarations }
     function LoadPOXFile(filename: string): Boolean;
+    function SavePOXFile(filename: string): Boolean;
   end;
 
 const
@@ -255,6 +257,22 @@ begin
     for i := 0 to bmpList.Count-1 do
       bmplist[i].SaveToFile( exportpath+currentObjectName+'_frame'+(i+1).ToString+'.bmp' );
     memINIData.Lines.SaveToFile( exportpath+currentObjectName+'.ini' );
+  end;
+end;
+
+procedure TfrmMain.btnSaveClick(Sender: TObject);
+var
+  saveDlg: TSaveDialog;
+begin
+  saveDlg := TSaveDialog.Create(nil);
+  try
+    // Set dir based on ResType...
+    if saveDlg.Execute then
+    begin
+      SavePOXFile(saveDlg.FileName);
+    end;
+  finally
+    saveDlg.Free;
   end;
 end;
 
@@ -584,6 +602,64 @@ end;
 procedure TfrmMain.rbX4Change(Sender: TObject);
 begin
   zoom(4.0);
+end;
+
+function TfrmMain.SavePOXFile(filename: string): Boolean;
+var
+  f : TBufferedFileStream;
+  rleData : TMemoryStream;
+  ini: TBytes;
+  rl : DWORD;
+  rle: RLEHDR;
+  i: Integer;
+  rleArr: Array of RLEHDR;
+begin
+  SetLength(rleArr, bmpList.Count);
+  f := TBufferedFileStream.Create(filename, fmCreate);
+  try
+    ini := TEncoding.Ansi.GetBytes('POXA');
+    f.Write(ini, 4);
+    ini := TEncoding.Ansi.GetBytes( TRttiEnumerationType.GetName(currentResType) );
+    f.Write(ini, 2);
+    rl := $0A0D;
+    f.Write(rl, 2);
+    ini := TEncoding.ANSI.GetBytes(memINIData.Lines.Text);
+    rl := Length(ini);
+    f.Write(rl, 4);
+    f.Write(ini, rl);
+    rl := $4242;
+    f.Write(rl, 2);
+    // RLE data
+    rl := bmpList.Count; // picCnt;
+    f.Write(rl, 4);
+    // Encode RLE and fill RLEHDR
+    rleData := TMemoryStream.Create;
+    try
+      // for 0 to bmpList.count-1
+      // encode and set rlehdr.dataptr position
+      for i := 0 to bmpList.Count-1 do
+      begin
+        encodeRLE(bmpList[i], rleArr[i], rleData);
+      end;
+
+      // RLEHDR size and data
+      rl := rleData.Size;
+      f.Write( rl, 4 );
+      rl := bmpList.Count * SizeOf( RLEHDR );
+      for i := 0 to bmpList.Count-1 do
+        f.Write(rleArr[i], SizeOf( RLEHDR ));
+      rleData.Position := 0;
+      f.CopyFrom(rleData, rleData.Size);
+    finally
+      rleData.Free;
+    end;
+
+    rl := $4242;
+    f.Write(rl, 2);
+    f.FlushBuffer;
+  finally
+    f.Free;
+  end;
 end;
 
 procedure TfrmMain.directionClick(Sender: TObject);
