@@ -177,10 +177,9 @@ var
   colarray: TList<DWORD>;
   casetyp: byte;
   didColor: boolean;
-  x, y, i: Integer;
+  x, y, i, two: Integer;
   bmpData: TBitmapData;
   transcount, oldx, currentrowlastx, rl : DWORD;
-  colorarray: string;
   colour: word;
   pxCol: TAlphaColorRec;
 
@@ -195,8 +194,8 @@ var
   end;
 
 begin
-  rle.SrcX := 1; // Not used
-  rle.SrcY := 1; // Not used
+  rle.SrcX := 0; // Not used ?
+  rle.SrcY := 0; // Not used ?
   rle.Wdh := 0; // Actually less than width+adjX
   rle.Hgh := 0; // Actually less than height+adjY
   rle.AdjX := MaxInt; //bitmap.Width; // Leftmost non-transparent pixel
@@ -212,13 +211,7 @@ begin
     begin
       transcount := 0;
       oldx := 0;
-      colorarray := '';
       didColor := False;
-      {
-      case 1
-      color 2
-      countx 4
-      }
       for y := 0 to bitmap.Height-1 do
       begin
         for x := 0 to bitmap.Width-1 do
@@ -243,17 +236,16 @@ begin
             didColor := true;
             if abs(transcount-oldx) > 0 then
             begin
-//              two := (transcount-oldx);
-//              memINI.Lines.Add('#02#'+ two.ToString);
+              two := (transcount-oldx);
+              if two < 0 then
+                two := two + rle.AdjX - 1;
               casetyp := $02;  // Adjust x
-              rl := trunc((transcount-oldx) shl 1);
+              rl := trunc((two) shl 1);
               rleData.Write(casetyp, 1);
               rleData.Write(rl, 4);
-//              inc(rlesize, 5);
               transcount := 0;
               oldx := 0;
             end;
-            colorarray := colorarray+'C';
             colarray.Add(ColorToBGR565(pxCol)); // BGR565
             currentrowlastx := x;
           end
@@ -262,9 +254,8 @@ begin
             if didColor then
             begin
               didColor := False;
-//              memINI.Lines.Add('#01#'+ intToStr(colorarray.Length)+colorarray);
               casetyp := $01;
-              rl := colorarray.Length;
+              rl := colarray.Count;
               rleData.Write(casetyp, 1);
               rleData.Write(rl, 4);
               for I := 0 to rl-1 do
@@ -272,8 +263,6 @@ begin
                 colour := colarray[I];
                 rleData.Write(colour, 2);
               end;
-//              inc(rlesize, 5+(colorarray.Length*2));
-              colorarray := '';
               colarray.Clear;
               if rle.Wdh<x then
                 rle.Wdh:=x;
@@ -284,17 +273,12 @@ begin
           end;
 
         end;
-//        memINI.Lines.Add('#03#');
-//        inc(rlesize, 1);
         casetyp := $03;
         rleData.Write(casetyp, 1);
 
         oldx := currentrowlastx;
         transcount := 0;
       end;
-      // w 18 (- 3) a1
-      // h 22 (- 2) a1
-
       rle.Wdh := rle.Wdh - rle.AdjX;
       rle.Hgh := rle.Hgh;
 

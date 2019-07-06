@@ -503,7 +503,7 @@ begin
   else
     imgRLE.Bitmap := nil;
   btnExport.Enabled := True;
-  if (currentResType = II) then
+  if (currentResType = II) or (currentResType = ST) then
     tkbFrames.Max := bmpList.Count-1;
   if (currentResType = LL) or (currentResType = LC) then
   begin
@@ -659,6 +659,7 @@ begin
     f.FlushBuffer;
   finally
     f.Free;
+    SetLength(rleArr, 0);
   end;
 end;
 
@@ -694,7 +695,7 @@ procedure TfrmMain.tkbFramesChange(Sender: TObject);
 var
   frame : Integer;
 begin
-  if currentResType = II then
+  if currentResType in [II, ST] then
     frame := Trunc(tkbFrames.Value+1)
   else
     frame := movements[(currentActionIdx*10)+currentDirection][Trunc(tkbFrames.Value)];
