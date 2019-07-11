@@ -401,10 +401,10 @@ var
   str : AnsiString;
   BB : Word;
   PicCnt, Size, RLESize, i : DWORD;
-  lpRLE, RelocOffset : PChar;
+//  lpRLE, RelocOffset : PChar;
   p : PRLEHDR;
   lpSpr : PRLEHDR;
-  L : LongWord;
+  L : DWord;
   bitmap : TBitmap;
   s: TSizeF;
 begin
@@ -449,10 +449,8 @@ begin
       Size := PicCnt * SizeOf( RLEHDR );
       GetMem( lpSpr, Size );
       f.Read( lpSpr^, Size );
-      GetMem( lpRLE, RLESize );
-      f.Read( lpRLE^, RLESize );
 
-      RelocOffset := PChar( lpRLE - lpSpr.DataPtr );
+//      RelocOffset := PChar( lpRLE - lpSpr.DataPtr );
       p := lpSpr;
       for i := 1 to PicCnt do
       begin
@@ -460,15 +458,14 @@ begin
         bitmap.Width := Trunc(imgRLE.Width);
         bitmap.Height := Trunc(imgRLE.Height);
 //        bitmap.PixelFormat := TPixelFormat.BGR_565; // pf16bit;  // Should be bgr565
-        p.DataPtr := PChar( p.DataPtr + DWORD( RelocOffset ) );
+//        p.DataPtr := int32( PChar( p.DataPtr + DWORD( RelocOffset ) ) );
 
-        decodeRLE(p, RLESize, bitmap);  // was digifxConvertRLE( dfx_hnd, p );
+        decodeRLE(p, f, bitmap);  // was digifxConvertRLE( dfx_hnd, p );
 
         bmpList.Add(bitmap);
         Inc( p );
       end;
       FreeMem(lpSpr);
-      FreeMem(lpRLE);
     end;
 
   finally
@@ -610,7 +607,7 @@ var
   rleData : TMemoryStream;
   ini: TBytes;
   rl : DWORD;
-  rle: RLEHDR;
+//  rle: RLEHDR;
   i: Integer;
   rleArr: Array of RLEHDR;
 begin

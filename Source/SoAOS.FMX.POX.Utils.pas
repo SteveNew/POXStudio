@@ -51,14 +51,14 @@ uses
 type
   PRLEHDR = ^RLEHDR;
   RLEHDR = record
-    SrcX : integer;
-    SrcY : integer;
-    Wdh : LongWord;
-    Hgh : LongWord;
-    AdjX : integer;
-    AdjY : integer;
-    PixFmt : LongWord;
-    DataPtr : PChar;
+    SrcX : int32;
+    SrcY : int32;
+    Wdh : DWord;
+    Hgh : DWord;
+    AdjX : int32;
+    AdjY : int32;
+    PixFmt : DWord;
+    DataPtr : int32;
   end;
 
   TBMPList = class(TObjectList<TBitmap>)
@@ -83,7 +83,7 @@ type
 
   function ResTypeFromFile(filename: string): TResTypeEnum;
   function ResTypeFromStream(filestream: TBufferedFileStream): TResTypeEnum;
-  procedure decodeRLE(rle: PRLEHDR; rleSize: integer; var bitmap: TBitmap);
+  procedure decodeRLE(rle: PRLEHDR; rleData: TBufferedFileStream; var bitmap: TBitmap);
   procedure encodeRLE(bitmap: TBitmap; var rle: RLEHDR; var rleData: TMemoryStream);
   procedure LayersFromFile(filename: string; clear: boolean; var bmpList: TBMPList);
 
@@ -95,7 +95,7 @@ uses
 function ResTypeFromFile(filename: string): TResTypeEnum;
 var
   f : TBufferedFileStream;
-  L : LongWord;
+  L : DWord;
 begin
   f := TBufferedFileStream.Create(fileName, fmOpenRead);
   try
@@ -120,13 +120,12 @@ begin
   Result := TRttiEnumerationType.GetValue<TResTypeEnum>(M);
 end;
 
-procedure decodeRLE(rle: PRLEHDR; rleSize: integer; var bitmap: TBitmap);
+procedure decodeRLE(rle: PRLEHDR; rleData: TBufferedFileStream; var bitmap: TBitmap);
 var
   i, x, y : integer;
   c : byte;
   colour: word;
   pxCol: TAlphaColorRec;
-  rleData: TROMemoryStream;
   bmpData: TBitmapData;
 begin
   pxCol.A := $FF;
@@ -134,9 +133,6 @@ begin
   begin
     x := 0;
     y := 0;
-    rleData := TROMemoryStream.Create;
-    rleData.SetMemPointer(rle.DataPtr, rleSize);
-    rleData.Position := 0;
     rleData.Read(&c, 1);
     while (c > 0) and (c < 4) do
     begin
@@ -167,7 +163,6 @@ begin
       end;
       rleData.Read(&c, 1);
     end;
-    FreeAndNil(rleData);
     bitmap.Unmap(bmpData);
   end;
 end;
@@ -201,12 +196,12 @@ begin
   rle.AdjX := MaxInt; //bitmap.Width; // Leftmost non-transparent pixel
   rle.AdjY := MaxInt; //bitmap.Height; // Topmost non-transparent pixel
   rle.PixFmt := 2; // BGR565?
-  rle.DataPtr := PChar(@rleData);
+//  rle.DataPtr := int32(PChar(@rleData));
 
   colarray := TList<DWORD>.Create;
   try
-    x := 0;
-    y := 0;
+//    x := 0;
+//    y := 0;
     if bitmap.Map(TMapAccess.Read, bmpData) then
     begin
       transcount := 0;
@@ -299,10 +294,10 @@ var
   str : AnsiString;
   BB : Word;
   PicCnt, Size, RLESize, i : DWORD;
-  lpRLE, RelocOffset : PChar;
+//  lpRLE, RelocOffset : PChar;
   p : PRLEHDR;
   lpSpr : PRLEHDR;
-  L : LongWord;
+  L : DWord;
   bitmap : TBitmap;
   resType : TResTypeEnum;
   ini : TMemIniFile;
@@ -353,14 +348,11 @@ begin
       Size := PicCnt * SizeOf( RLEHDR );
       GetMem( lpSpr, Size );
       f.Read( lpSpr^, Size );
-      GetMem( lpRLE, RLESize );
-      f.Read( lpRLE^, RLESize );
 
-      RelocOffset := PChar( lpRLE - lpSpr.DataPtr );
       p := lpSpr;
       for i := 0 to PicCnt-1 do
       begin
-        p.DataPtr := p.DataPtr + DWORD( RelocOffset );
+//        p.DataPtr := p.DataPtr + DWORD( RelocOffset );
         if clear then
         begin
           bitmap := TBitmap.Create;
@@ -370,12 +362,11 @@ begin
         else
           bitmap := bmpList[i];
 //        bitmap.PixelFormat := TPixelFormat.BGR_565; // pf16bit;  // Should be bgr565
-        decodeRLE(p, RLESize, bitmap);  // was digifxConvertRLE( dfx_hnd, p );
+        decodeRLE(p, f, bitmap);  // was digifxConvertRLE( dfx_hnd, p );
         if clear then bmpList.Add(bitmap);
         Inc( p );
       end;
       FreeMem(lpSpr);
-      FreeMem(lpRLE);
     end;
   finally
     f.Free;
