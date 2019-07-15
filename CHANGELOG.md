@@ -2,8 +2,6 @@
 All notable changes to this project will be documented in this file.
 
 ## [Unreleased]
-- 64-bit support - remove pointer math.
-- Include POX save code.
 - Include Layers manipulation code.
 - Include new "Tabar" layer
 - Add support for LL:LayeredFramesToBack
@@ -15,6 +13,10 @@ All notable changes to this project will be documented in this file.
 - Import bmps and/or ini data.
 - Investigate .gif and .dae import - if needed.
 - Export/Import sprite-sheets if needed - for colour manipulation.
+
+## 2019-07-15
+### Fixed
+- A bit of saving - so enabled that again - needs heavy test run
 
 ## 2019-07-11
 ### Added

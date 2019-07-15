@@ -266,8 +266,27 @@ begin
             end;
             inc(transcount)
           end;
-
         end;
+
+        if didColor then
+        begin
+          didColor := False;
+          casetyp := $01;
+          rl := colarray.Count;
+          rleData.Write(casetyp, 1);
+          rleData.Write(rl, 4);
+          for I := 0 to rl-1 do
+          begin
+            colour := colarray[I];
+            rleData.Write(colour, 2);
+          end;
+          colarray.Clear;
+          if rle.Wdh<x then
+            rle.Wdh:=x;
+          if rle.Hgh < y then
+            rle.Hgh := y;
+        end;
+
         casetyp := $03;
         rleData.Write(casetyp, 1);
 
