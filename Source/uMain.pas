@@ -171,6 +171,7 @@ type
       const AItem: TListViewItem);
     procedure btnAboutClick(Sender: TObject);
     procedure btnSaveClick(Sender: TObject);
+    procedure btnImportClick(Sender: TObject);
   private
     { Private declarations }
     ArtLibPath: String;
@@ -190,6 +191,9 @@ type
 //    visibleLayers: Set of TLayers;
     movements: TObjectDictionary<Byte, TFrameList>;
     bmpList: TBMPList;
+
+    compareList: TStringList;
+    RLEDataLoad, RLEDataSave: TMemoryStream;
 
     procedure zoom(factor: single);
     procedure parseIni(iniData: TStrings);
@@ -257,6 +261,57 @@ begin
     for i := 0 to bmpList.Count-1 do
       bmplist[i].SaveToFile( exportpath+currentObjectName+'_frame'+(i+1).ToString+'.bmp' );
     memINIData.Lines.SaveToFile( exportpath+currentObjectName+'.ini' );
+  end;
+end;
+
+procedure TfrmMain.btnImportClick(Sender: TObject);
+var
+  files: TArray<string>;
+  filn: string;
+//  POX: TPOXObject;
+  oldPath: string;
+  NewArtLIbPath: string;
+  ab, p: integer;
+  ok, miss: integer;
+begin
+  ab := 0;
+  ok := 0;
+  miss := 0;
+  if SelectDirectory('Select your "ArtLib" location', '', NewArtLibPath) then
+  begin
+    compareList := TStringList.Create;
+    try
+      for p := 0 to POXList.Count-1 do
+      begin
+        RLEDataLoad := TMemoryStream.Create;
+        RLEDataSave := TMemoryStream.Create;
+        LoadPOXFile(ArtLibPath+POXList[p].ObjectRelativePath);
+        if not DirectoryExists(ExtractFilePath( NewArtLibPath+POXList[p].ObjectRelativePath )) then
+          TDirectory.CreateDirectory(ExtractFilePath( NewArtLibPath+POXList[p].ObjectRelativePath ));
+        SavePOXFile(NewArtLibPath+POXList[p].ObjectRelativePath);
+        inc(ab);
+        RLEDataLoad.Position := 0;
+        RLEDataSave.Position := 0;
+        if CompareMem(RLEDataLoad, RLEDataSave, RLEDataLoad.Size) then
+        begin
+          compareList.Add(POXList[p].ObjectRelativePath+' RLE data match');
+          inc(ok);
+        end
+        else
+        begin
+          compareList.Add('Diff on '+POXList[p].ObjectRelativePath);
+          inc(miss);
+        end;
+        RLEDataLoad.Free;
+        RLEDataSave.Free;
+      end;
+      compareList.Add('');
+      compareList.Add(ab.ToString+'('+ok.ToString+'/'+miss.ToString+')');
+      compareList.SaveToFile('c:\temp\poxcompare_'+ok.ToString+'_'+miss.ToString+'.txt');
+    finally
+      compareList.Free;
+    end;
+    showmessage(ab.ToString+'('+ok.ToString+'/'+miss.ToString+')');
   end;
 end;
 
@@ -407,10 +462,12 @@ var
   L : DWord;
   bitmap : TBitmap;
   s: TSizeF;
+  g: integer;
 begin
   Result := False;
   tkbFrames.Value := 0;
   imgRLE.Bitmap := nil;
+  movements.Clear;
   ClearBMPList;
   currentResTypeName := '';
   currentObjectName := TPath.GetFileNameWithoutExtension(filename);
@@ -449,7 +506,9 @@ begin
       Size := PicCnt * SizeOf( RLEHDR );
       GetMem( lpSpr, Size );
       f.Read( lpSpr^, Size );
-
+      g := f.Position;
+      RLEDataLoad.CopyFrom(f, RLESize);
+      f.Position := g;
 //      RelocOffset := PChar( lpRLE - lpSpr.DataPtr );
       p := lpSpr;
       for i := 1 to PicCnt do
@@ -488,7 +547,6 @@ begin
   memINIData.Lines.Clear;
   rbX1.IsChecked := True;
   tkbFrames.Value := 0;
-  movements.Clear;
 
   LoadPOXFile(ArtLibPath+AItem.Detail);
   updActions;
@@ -640,13 +698,22 @@ begin
       end;
 
       // RLEHDR size and data
+
+// Orig
+//      01 00 00 00 01 00 00 00 12 00 00 00 16 00 00 00 01 00 00 00 01 00 00 00 02 00 00 00 60 D5 CB 00
+// New
+//      00 00 00 00 00 00 00 00 12 00 00 00 16 00 00 00 01 00 00 00 01 00 00 00 02 00 00 00 00 00 00 00
+//      SrcX        SrcY        Wdth        Hgh         AdjX        AdjY        PxFmt       DataPtr
+
       rl := rleData.Size;
-      f.Write( rl, 4 );
+      f.Write( rl, 4 );   //RLESize
       rl := bmpList.Count * SizeOf( RLEHDR );
       for i := 0 to bmpList.Count-1 do
         f.Write(rleArr[i], SizeOf( RLEHDR ));
       rleData.Position := 0;
       f.CopyFrom(rleData, rleData.Size);
+      rleData.Position := 0;
+      RLEDataSave.CopyFrom(rleData, rleData.Size);
     finally
       rleData.Free;
     end;

@@ -196,7 +196,7 @@ begin
   rle.AdjX := MaxInt; //bitmap.Width; // Leftmost non-transparent pixel
   rle.AdjY := MaxInt; //bitmap.Height; // Topmost non-transparent pixel
   rle.PixFmt := 2; // BGR565?
-//  rle.DataPtr := int32(PChar(@rleData));
+  rle.DataPtr := int32(PChar(@rleData));
 
   colarray := TList<DWORD>.Create;
   try
@@ -229,7 +229,7 @@ begin
           if pxCol.Color <> 0 then
           begin
             didColor := true;
-            if abs(transcount-oldx) > 0 then
+            if abs(transcount-oldx) >= 0 then
             begin
               two := (transcount-oldx);
               if two < 0 then
