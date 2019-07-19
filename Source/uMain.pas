@@ -553,7 +553,7 @@ begin
   updDirections;
   updateLayers;
   UpdateBMPListBasedonVisibleLayers;
-  if bmpList.Count>0 then // LC
+  if bmpList.Count>0 then // non-LC
     imgRLE.Bitmap := bmpList[0]
   else
     imgRLE.Bitmap := nil;
@@ -680,46 +680,50 @@ begin
     f.Write(rl, 2);
     ini := TEncoding.ANSI.GetBytes(memINIData.Lines.Text);
     rl := Length(ini);
-    f.Write(rl, 4);
+    if currentResType<>TResTypeEnum.LC then
+      f.Write(rl, 4);
     f.Write(ini, rl);
-    rl := $4242;
-    f.Write(rl, 2);
-    // RLE data
-    rl := bmpList.Count; // picCnt;
-    f.Write(rl, 4);
-    // Encode RLE and fill RLEHDR
-    rleData := TMemoryStream.Create;
-    try
-      // for 0 to bmpList.count-1
-      // encode and set rlehdr.dataptr position
-      for i := 0 to bmpList.Count-1 do
-      begin
-        encodeRLE(bmpList[i], rleArr[i], rleData);
+    if currentResType<>TResTypeEnum.LC then
+    begin
+      rl := $4242;
+      f.Write(rl, 2);
+      // RLE data
+      rl := bmpList.Count; // picCnt;
+      f.Write(rl, 4);
+      // Encode RLE and fill RLEHDR
+      rleData := TMemoryStream.Create;
+      try
+        // for 0 to bmpList.count-1
+        // encode and set rlehdr.dataptr position
+        for i := 0 to bmpList.Count-1 do
+        begin
+          encodeRLE(bmpList[i], rleArr[i], rleData);
+        end;
+
+        // RLEHDR size and data
+
+  // Orig
+  //      01 00 00 00 01 00 00 00 12 00 00 00 16 00 00 00 01 00 00 00 01 00 00 00 02 00 00 00 60 D5 CB 00
+  // New
+  //      00 00 00 00 00 00 00 00 12 00 00 00 16 00 00 00 01 00 00 00 01 00 00 00 02 00 00 00 00 00 00 00
+  //      SrcX        SrcY        Wdth        Hgh         AdjX        AdjY        PxFmt       DataPtr
+
+        rl := rleData.Size;
+        f.Write( rl, 4 );   //RLESize
+        rl := bmpList.Count * SizeOf( RLEHDR );
+        for i := 0 to bmpList.Count-1 do
+          f.Write(rleArr[i], SizeOf( RLEHDR ));
+        rleData.Position := 0;
+        f.CopyFrom(rleData, rleData.Size);
+        rleData.Position := 0;
+        RLEDataSave.CopyFrom(rleData, rleData.Size);
+      finally
+        rleData.Free;
       end;
 
-      // RLEHDR size and data
-
-// Orig
-//      01 00 00 00 01 00 00 00 12 00 00 00 16 00 00 00 01 00 00 00 01 00 00 00 02 00 00 00 60 D5 CB 00
-// New
-//      00 00 00 00 00 00 00 00 12 00 00 00 16 00 00 00 01 00 00 00 01 00 00 00 02 00 00 00 00 00 00 00
-//      SrcX        SrcY        Wdth        Hgh         AdjX        AdjY        PxFmt       DataPtr
-
-      rl := rleData.Size;
-      f.Write( rl, 4 );   //RLESize
-      rl := bmpList.Count * SizeOf( RLEHDR );
-      for i := 0 to bmpList.Count-1 do
-        f.Write(rleArr[i], SizeOf( RLEHDR ));
-      rleData.Position := 0;
-      f.CopyFrom(rleData, rleData.Size);
-      rleData.Position := 0;
-      RLEDataSave.CopyFrom(rleData, rleData.Size);
-    finally
-      rleData.Free;
+      rl := $4242;
+      f.Write(rl, 2);
     end;
-
-    rl := $4242;
-    f.Write(rl, 2);
     f.FlushBuffer;
   finally
     f.Free;
