@@ -142,13 +142,22 @@ begin
           while i > 0 do
           begin
             rleData.Read(&colour, 2);
-            pxCol.B := (Colour and $1F) shl 3;
-            pxCol.G := ((Colour and $7E0) shr 5) shl 2;
-            pxCol.R := ((Colour and $F800) shr 11) shl 3;
+            if rle.PixFmt=1 then
+            begin
+              pxCol.B := (Colour and $1F) shl 3;
+              pxCol.G := ((Colour and $3E0) shr 5) shl 3;
+              pxCol.R := ((Colour and $7C00) shr 10) shl 3;
+            end;
+            if rle.PixFmt=2 then
+            begin
+              pxCol.B := (Colour and $1F) shl 3;
+              pxCol.G := ((Colour and $7E0) shr 5) shl 2;
+              pxCol.R := ((Colour and $F800) shr 11) shl 3;
   // Alternatives - but above seems good enough and fastest
   //          r := (r * 527 + 23 ) shr 6; // floor(255/31 * R);
   //          g := (g * 259 + 33 ) shr 6; // floor(255/63 * G);
   //          b := (b * 527 + 23 ) shr 6; // floor(255/31 * B);
+            end;
             bmpData.SetPixel(X+rle.AdjX, Y+rle.AdjY, pxCol.Color);
             inc(x);
             dec(i);
@@ -177,12 +186,10 @@ var
   transcount, oldx, currentrowlastx, rl : DWORD;
   colour: word;
   pxCol: TAlphaColorRec;
-  SrcX : int32;
-  SrcY : int32;
-  Wdh : DWord;
-  Hgh : DWord;
-  AdjX : int32;
-  AdjY : int32;
+  Wdh : Integer;
+  Hgh : Integer;
+  AdjX : Integer;
+  AdjY : Integer;
 
   function ColorToBGR565(color: TAlphaColorRec): DWORD;
   var
@@ -195,8 +202,6 @@ var
   end;
 
 begin
-  SrcX := 0; // Not used ?
-  SrcY := 0; // Not used ?
   Wdh := 0; // Actually less than width+adjX
   Hgh := 0; // Actually less than height+adjY
   AdjX := 9999; //bitmap.Width; // Leftmost non-transparent pixel
@@ -237,10 +242,10 @@ begin
       oldx := 0;
       didColor := False;
 
-      for y := AdjY to Hgh do
+      for y := AdjY to bitmap.Height-1 do // Hgh do
       begin
 
-        for x := AdjX to Wdh do
+        for x := AdjX to bitmap.Width-1 do // Wdh do
         begin
           pxCol.Color := bmpData.GetPixel(x,y);
           if pxCol.Color <> 0 then
