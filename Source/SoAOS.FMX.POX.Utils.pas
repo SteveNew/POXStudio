@@ -186,12 +186,10 @@ var
   transcount, oldx, currentrowlastx, rl : DWORD;
   colour: word;
   pxCol: TAlphaColorRec;
-  SrcX : int32;
-  SrcY : int32;
-  Wdh : DWord;
-  Hgh : DWord;
-  AdjX : int32;
-  AdjY : int32;
+  Wdh : Integer;
+  Hgh : Integer;
+  AdjX : Integer;
+  AdjY : Integer;
 
   function ColorToBGR565(color: TAlphaColorRec): DWORD;
   var
@@ -204,8 +202,6 @@ var
   end;
 
 begin
-  SrcX := 0; // Not used ?
-  SrcY := 0; // Not used ?
   Wdh := 0; // Actually less than width+adjX
   Hgh := 0; // Actually less than height+adjY
   AdjX := 9999; //bitmap.Width; // Leftmost non-transparent pixel
@@ -246,10 +242,10 @@ begin
       oldx := 0;
       didColor := False;
 
-      for y := AdjY to Hgh do
+      for y := AdjY to bitmap.Height-1 do  // should be Hgh, since no relevant data outside.
       begin
 
-        for x := AdjX to Wdh do
+        for x := AdjX to bitmap.Width-1 do  // should be Wdh, since no relevant data outside.
         begin
           pxCol.Color := bmpData.GetPixel(x,y);
           if pxCol.Color <> 0 then
