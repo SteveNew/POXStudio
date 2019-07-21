@@ -142,13 +142,22 @@ begin
           while i > 0 do
           begin
             rleData.Read(&colour, 2);
-            pxCol.B := (Colour and $1F) shl 3;
-            pxCol.G := ((Colour and $7E0) shr 5) shl 2;
-            pxCol.R := ((Colour and $F800) shr 11) shl 3;
+            if rle.PixFmt=1 then
+            begin
+              pxCol.B := (Colour and $1F) shl 3;
+              pxCol.G := ((Colour and $3E0) shr 5) shl 3;
+              pxCol.R := ((Colour and $7C00) shr 10) shl 3;
+            end;
+            if rle.PixFmt=2 then
+            begin
+              pxCol.B := (Colour and $1F) shl 3;
+              pxCol.G := ((Colour and $7E0) shr 5) shl 2;
+              pxCol.R := ((Colour and $F800) shr 11) shl 3;
   // Alternatives - but above seems good enough and fastest
   //          r := (r * 527 + 23 ) shr 6; // floor(255/31 * R);
   //          g := (g * 259 + 33 ) shr 6; // floor(255/63 * G);
   //          b := (b * 527 + 23 ) shr 6; // floor(255/31 * B);
+            end;
             bmpData.SetPixel(X+rle.AdjX, Y+rle.AdjY, pxCol.Color);
             inc(x);
             dec(i);
