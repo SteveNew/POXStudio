@@ -177,6 +177,12 @@ var
   transcount, oldx, currentrowlastx, rl : DWORD;
   colour: word;
   pxCol: TAlphaColorRec;
+  SrcX : int32;
+  SrcY : int32;
+  Wdh : DWord;
+  Hgh : DWord;
+  AdjX : int32;
+  AdjY : int32;
 
   function ColorToBGR565(color: TAlphaColorRec): DWORD;
   var
@@ -189,41 +195,52 @@ var
   end;
 
 begin
-  rle.SrcX := 0; // Not used ?
-  rle.SrcY := 0; // Not used ?
-  rle.Wdh := 0; // Actually less than width+adjX
-  rle.Hgh := 0; // Actually less than height+adjY
-  rle.AdjX := MaxInt; //bitmap.Width; // Leftmost non-transparent pixel
-  rle.AdjY := MaxInt; //bitmap.Height; // Topmost non-transparent pixel
-  rle.PixFmt := 2; // BGR565?
-  rle.DataPtr := int32(rleData.Position); // int32(PChar(@rleData));
+  SrcX := 0; // Not used ?
+  SrcY := 0; // Not used ?
+  Wdh := 0; // Actually less than width+adjX
+  Hgh := 0; // Actually less than height+adjY
+  AdjX := 9999; //bitmap.Width; // Leftmost non-transparent pixel
+  AdjY := 9999; //bitmap.Height; // Topmost non-transparent pixel
 
   colarray := TList<DWORD>.Create;
   try
-//    x := 0;
-//    y := 0;
     if bitmap.Map(TMapAccess.Read, bmpData) then
     begin
-      transcount := 0;
-      oldx := 0;
-      didColor := False;
+      // Get data dimensions
       for y := 0 to bitmap.Height-1 do
       begin
         for x := 0 to bitmap.Width-1 do
         begin
-          pxCol.Color := bmpData.GetPixel(x,y);
+          pxCol.Color := bmpData.GetPixel(x, y);
           if pxCol.Color <> 0 then
           begin
-            if rle.AdjX > x then rle.AdjX := x;
-            if rle.AdjY > y then rle.AdjY := y;
+            if AdjX > x then AdjX := x;
+            if AdjY > y then AdjY := y;
+            if Wdh < x then
+              Wdh := x;
+            if Hgh < y then
+              Hgh := y;
           end;
         end;
       end;
 
-      for y := rle.AdjY to bitmap.Height-1 do
+      rle.SrcX := AdjX; // Not used ?
+      rle.SrcY := AdjY; // Not used ?
+      rle.Wdh := Wdh - AdjX + 1;
+      rle.Hgh := Hgh - AdjY + 1;
+      rle.AdjX := AdjX;
+      rle.AdjY := AdjY;
+      rle.PixFmt := 2;
+      rle.DataPtr := int32(rleData.Position); // int32(PChar(@rleData));
+
+      transcount := 0;
+      oldx := 0;
+      didColor := False;
+
+      for y := AdjY to Hgh do
       begin
 
-        for x := rle.adjX to bitmap.Width-1 do
+        for x := AdjX to Wdh do
         begin
           pxCol.Color := bmpData.GetPixel(x,y);
           if pxCol.Color <> 0 then
@@ -233,7 +250,7 @@ begin
             begin
               two := (transcount-oldx);
               if two < 0 then
-                two := two + rle.AdjX - 1;
+                two := two + AdjX - 1;
               casetyp := $02;  // Adjust x
               rl := trunc((two) shl 1);
               rleData.Write(casetyp, 1);
@@ -259,10 +276,6 @@ begin
                 rleData.Write(colour, 2);
               end;
               colarray.Clear;
-              if rle.Wdh<x then
-                rle.Wdh:=x;
-              if rle.Hgh < y then
-                rle.Hgh := y;
             end;
             inc(transcount)
           end;
@@ -281,10 +294,6 @@ begin
             rleData.Write(colour, 2);
           end;
           colarray.Clear;
-          if rle.Wdh<x then
-            rle.Wdh:=x;
-          if rle.Hgh < y then
-            rle.Hgh := y;
         end;
 
         casetyp := $03;
@@ -293,10 +302,6 @@ begin
         oldx := currentrowlastx;
         transcount := 0;
       end;
-      rle.SrcX := rle.AdjX; // Not used ?
-      rle.SrcY := rle.AdjY; // Not used ?
-      rle.Wdh := rle.Wdh - rle.AdjX;
-      rle.Hgh := rle.Hgh;
 
       bitmap.Unmap(bmpData);
       casetyp := $00;      // bitmap done
@@ -306,7 +311,6 @@ begin
   finally
     colarray.Free;
   end;
-
 end;
 
 procedure LayersFromFile(filename: string; clear: boolean; var bmpList: TBMPList);
