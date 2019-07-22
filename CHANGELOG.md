@@ -14,6 +14,15 @@ All notable changes to this project will be documented in this file.
 - Investigate .gif and .dae import - if needed.
 - Export/Import sprite-sheets if needed - for colour manipulation.
 
+## 2019-07-22
+### Fixed
+- A bit more of saving - have done a 30 min. play with a complete set of recreated chapter 1 POXs
+### Added
+- pf555 decoding support - since a few files has this - will save only as pf565
+- Static resources image width mod 4 rule added on load
+### Removed
+- POX files are not "RLE-optimized" for now - so still contains unneeded 02 00 00 00 00 and 03
+
 ## 2019-07-15
 ### Fixed
 - A bit of saving - so enabled that again - needs heavy test run

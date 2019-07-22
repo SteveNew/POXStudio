@@ -532,6 +532,7 @@ procedure TfrmMain.parseIni(iniData: TStrings);
 var
   ini: TMemIniFile;
   actionStr: string;
+  W: Integer;
 
   procedure addFrames;
   var
@@ -567,7 +568,16 @@ begin
     actions.Clear;
     actions.AddStrings(actionStr.Split([',']));
 
-    imgRLE.Width := ini.ReadInteger('HEADER', 'ImageWidth', 0);
+    if currentResType in [ST, DS, TT] then
+    begin
+      W := ini.ReadInteger('HEADER', 'ImageWidth', 0);
+      if (W mod 4)=0 then
+        imgRLE.Width := W
+      else
+        imgRLE.Width := W + 4 - (W mod 4);
+    end
+    else
+      imgRLE.Width := ini.ReadInteger('HEADER', 'ImageWidth', 0);
     imgRLE.Height := ini.ReadInteger('HEADER', 'ImageHeight', 0);
     frameMultiplier := ini.ReadInteger('HEADER','FrameMultiplier', 1);
     // triggerframes
@@ -642,14 +652,6 @@ begin
           encodeRLE(bmpList[i], rleArr[i], rleData);
         end;
 
-        // RLEHDR size and data
-
-  // Orig
-  //      01 00 00 00 01 00 00 00 12 00 00 00 16 00 00 00 01 00 00 00 01 00 00 00 02 00 00 00 60 D5 CB 00
-  // New
-  //      00 00 00 00 00 00 00 00 12 00 00 00 16 00 00 00 01 00 00 00 01 00 00 00 02 00 00 00 00 00 00 00
-  //      SrcX        SrcY        Wdth        Hgh         AdjX        AdjY        PxFmt       DataPtr
-
         rl := rleData.Size;
         f.Write( rl, 4 );   //RLESize
         rl := bmpList.Count * SizeOf( RLEHDR );
@@ -669,6 +671,7 @@ begin
     f.Free;
     SetLength(rleArr, 0);
   end;
+  Result := True;
 end;
 
 procedure TfrmMain.directionClick(Sender: TObject);
