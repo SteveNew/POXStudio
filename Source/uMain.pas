@@ -193,6 +193,7 @@ type
     bmpList: TBMPList;
 
     compareList: TStringList;
+    loadw, loadh, savew, saveh : integer;
     RLEDataLoad, RLEDataSave: TMemoryStream;
 
     procedure zoom(factor: single);
@@ -283,27 +284,27 @@ begin
     try
       for p := 0 to POXList.Count-1 do
       begin
-        RLEDataLoad := TMemoryStream.Create;
-        RLEDataSave := TMemoryStream.Create;
+//        RLEDataLoad := TMemoryStream.Create;
+//        RLEDataSave := TMemoryStream.Create;
         LoadPOXFile(ArtLibPath+POXList[p].ObjectRelativePath);
         if not DirectoryExists(ExtractFilePath( NewArtLibPath+POXList[p].ObjectRelativePath )) then
           TDirectory.CreateDirectory(ExtractFilePath( NewArtLibPath+POXList[p].ObjectRelativePath ));
         SavePOXFile(NewArtLibPath+POXList[p].ObjectRelativePath);
         inc(ab);
-        RLEDataLoad.Position := 0;
-        RLEDataSave.Position := 0;
-        if CompareMem(RLEDataLoad, RLEDataSave, RLEDataLoad.Size) then
-        begin
-          compareList.Add(POXList[p].ObjectRelativePath+' RLE data match');
-          inc(ok);
-        end
-        else
-        begin
-          compareList.Add('Diff on '+POXList[p].ObjectRelativePath);
-          inc(miss);
-        end;
-        RLEDataLoad.Free;
-        RLEDataSave.Free;
+//        RLEDataLoad.Position := 0;
+//        RLEDataSave.Position := 0;
+//        if CompareMem(RLEDataLoad, RLEDataSave, RLEDataLoad.Size) then
+//        begin
+//          compareList.Add(POXList[p].ObjectRelativePath+' RLE data match');
+//          inc(ok);
+//        end
+//        else
+//        begin
+//          compareList.Add('Diff on '+POXList[p].ObjectRelativePath);
+//          inc(miss);
+//        end;
+//        RLEDataLoad.Free;
+//        RLEDataSave.Free;
       end;
       compareList.Add('');
       compareList.Add(ab.ToString+'('+ok.ToString+'/'+miss.ToString+')');
@@ -506,9 +507,9 @@ begin
       Size := PicCnt * SizeOf( RLEHDR );
       GetMem( lpSpr, Size );
       f.Read( lpSpr^, Size );
-      g := f.Position;
-      RLEDataLoad.CopyFrom(f, RLESize);
-      f.Position := g;
+//      g := f.Position;
+//      RLEDataLoad.CopyFrom(f, RLESize);
+//      f.Position := g;
 //      RelocOffset := PChar( lpRLE - lpSpr.DataPtr );
       p := lpSpr;
       for i := 1 to PicCnt do
@@ -590,6 +591,7 @@ procedure TfrmMain.parseIni(iniData: TStrings);
 var
   ini: TMemIniFile;
   actionStr: string;
+  W: Integer;
 
   procedure addFrames;
   var
@@ -625,7 +627,15 @@ begin
     actions.Clear;
     actions.AddStrings(actionStr.Split([',']));
 
-    imgRLE.Width := ini.ReadInteger('HEADER', 'ImageWidth', 0);
+    W := ini.ReadInteger('HEADER', 'ImageWidth', 0);
+    if (W mod 4)=0 then
+      imgRLE.Width := ini.ReadInteger('HEADER', 'ImageWidth', 0)
+    else
+    begin
+      imgRLE.Width := W + 4 - (W mod 4);
+      compareList.Add(currentObjectName+' ['+ResTypeStr[currentResType]+']');
+    end;
+//    imgRLE.Width := ini.ReadInteger('HEADER', 'ImageWidth', 0);
     imgRLE.Height := ini.ReadInteger('HEADER', 'ImageHeight', 0);
     frameMultiplier := ini.ReadInteger('HEADER','FrameMultiplier', 1);
     // triggerframes
@@ -715,8 +725,8 @@ begin
           f.Write(rleArr[i], SizeOf( RLEHDR ));
         rleData.Position := 0;
         f.CopyFrom(rleData, rleData.Size);
-        rleData.Position := 0;
-        RLEDataSave.CopyFrom(rleData, rleData.Size);
+//        rleData.Position := 0;
+//        RLEDataSave.CopyFrom(rleData, rleData.Size);
       finally
         rleData.Free;
       end;
