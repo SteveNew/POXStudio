@@ -240,6 +240,7 @@ begin
 
       transcount := 0;
       oldx := 0;
+      currentrowlastx := 0;
       didColor := False;
 
       for y := AdjY to bitmap.Height-1 do // Hgh do
@@ -338,6 +339,8 @@ begin
     Exit;
   f := TBufferedFileStream.Create(filename, fmOpenRead);
   try
+    imgwth := 0;
+    imghgt := 0;
     f.Read( L , SizeOf( L ) );
     if ( L<>$41584F50 ) then // 'POXA'
       Exit;

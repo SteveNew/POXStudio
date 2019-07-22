@@ -193,8 +193,8 @@ type
     bmpList: TBMPList;
 
     compareList: TStringList;
-    loadw, loadh, savew, saveh : integer;
-    RLEDataLoad, RLEDataSave: TMemoryStream;
+//    loadw, loadh, savew, saveh : integer;
+//    RLEDataLoad, RLEDataSave: TMemoryStream;
 
     procedure zoom(factor: single);
     procedure parseIni(iniData: TStrings);
@@ -267,10 +267,10 @@ end;
 
 procedure TfrmMain.btnImportClick(Sender: TObject);
 var
-  files: TArray<string>;
-  filn: string;
+//  files: TArray<string>;
+//  filn: string;
 //  POX: TPOXObject;
-  oldPath: string;
+//  oldPath: string;
   NewArtLIbPath: string;
   ab, p: integer;
   ok, miss: integer;
@@ -463,7 +463,7 @@ var
   L : DWord;
   bitmap : TBitmap;
   s: TSizeF;
-  g: integer;
+//  g: integer;
 begin
   Result := False;
   tkbFrames.Value := 0;
@@ -627,15 +627,19 @@ begin
     actions.Clear;
     actions.AddStrings(actionStr.Split([',']));
 
-    W := ini.ReadInteger('HEADER', 'ImageWidth', 0);
-    if (W mod 4)=0 then
-      imgRLE.Width := ini.ReadInteger('HEADER', 'ImageWidth', 0)
-    else
+    if currentResType in [ST, DS, TT] then
     begin
-      imgRLE.Width := W + 4 - (W mod 4);
-      compareList.Add(currentObjectName+' ['+ResTypeStr[currentResType]+']');
-    end;
-//    imgRLE.Width := ini.ReadInteger('HEADER', 'ImageWidth', 0);
+      W := ini.ReadInteger('HEADER', 'ImageWidth', 0);
+      if (W mod 4)=0 then
+        imgRLE.Width := W
+      else
+      begin
+        imgRLE.Width := W + 4 - (W mod 4);
+        compareList.Add(currentObjectName+' ['+ResTypeStr[currentResType]+']');
+      end;
+    end
+    else
+      imgRLE.Width := ini.ReadInteger('HEADER', 'ImageWidth', 0);
     imgRLE.Height := ini.ReadInteger('HEADER', 'ImageHeight', 0);
     frameMultiplier := ini.ReadInteger('HEADER','FrameMultiplier', 1);
     // triggerframes
@@ -739,6 +743,7 @@ begin
     f.Free;
     SetLength(rleArr, 0);
   end;
+  Result := True;
 end;
 
 procedure TfrmMain.directionClick(Sender: TObject);
