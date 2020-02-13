@@ -120,6 +120,7 @@ var
 <sub>11</sub>TInventoryResource.LoadData  
 <sub>12</sub>TLinkLayered  
 <sub>13</sub>Not used/read  
+<sub>14</sub>Used for BMP import/export
 
 **[Header]**
 
@@ -151,7 +152,7 @@ var
 |LayeredFramesToBack|string|set BackLayer array (0..383)||<sub>10</sub>
 |FileName|string|||<sub>13</sub>
 |GameClass|string|||<sub>13</sub>
-|TransparentColor|int|||<sub>13</sub>
+|TransparentColor|int|||<sub>14</sub>
 |ImagePacking|bool|||<sub>13</sub>
 |EditorImage|int|||<sub>13</sub>
 |TileType|string|||<sub>13</sub>
