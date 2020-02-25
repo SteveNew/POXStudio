@@ -14,6 +14,19 @@ All notable changes to this project will be documented in this file.
 - Investigate .gif and .dae import - if needed.
 - Export/Import sprite-sheets if needed - for colour manipulation.
 
+## 2020-02-25
+### Added
+- Added support for reading/deflating .AG files (Hero X), into users AppData temp directory as .pox files and read from there. Linked Layered resources is not handle correct since original relative paths are not resolved - yet?
+- Honoring the INI datas TransparentColor and EditorImage values.
+- Transparent color can be changed.
+### Changed
+- German translation gone for now.
+- Zoom/Scaling is now 1-2-4-8. 
+
+## 2019-12-22
+### Added
+- Added some draft INI data documentation
+
 ## 2019-07-22
 ### Fixed
 - A bit more of saving - have done a 30 min. play with a complete set of recreated chapter 1 POXs

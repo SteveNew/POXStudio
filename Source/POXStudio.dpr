@@ -11,7 +11,8 @@ uses
   SoAOS.FMX.POX.Utils in 'SoAOS.FMX.POX.Utils.pas',
   uAbout in 'uAbout.pas' {frmAbout},
   uMain in 'uMain.pas' {frmMain},
-  uSplash in 'uSplash.pas' {frmSplash};
+  uSplash in 'uSplash.pas' {frmSplash},
+  AG.Utils in 'AG.Utils.pas';
 
 {$R *.res}
 

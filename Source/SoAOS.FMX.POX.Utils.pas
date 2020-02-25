@@ -46,7 +46,7 @@ unit SoAOS.FMX.POX.Utils;
 interface
 
 uses
-  System.Types, System.Classes, System.Generics.Collections, FMX.Graphics;
+  System.Types, System.Classes, System.UITypes, System.Generics.Collections, FMX.Graphics;
 
 type
   PRLEHDR = ^RLEHDR;
@@ -83,14 +83,15 @@ type
 
   function ResTypeFromFile(filename: string): TResTypeEnum;
   function ResTypeFromStream(filestream: TBufferedFileStream): TResTypeEnum;
-  procedure decodeRLE(rle: PRLEHDR; rleData: TBufferedFileStream; var bitmap: TBitmap);
+  procedure decodeRLE(rle: PRLEHDR; rleData: TBufferedFileStream; const INITransparentColor: TAlphaColor; var bitmap: TBitmap);
   procedure encodeRLE(bitmap: TBitmap; var rle: RLEHDR; var rleData: TMemoryStream);
-  procedure LayersFromFile(filename: string; clear: boolean; var bmpList: TBMPList);
+  procedure LayersFromFile(filename: string; clear: boolean; var bmpList: TBMPList; out EditorFrame: Integer);
+  procedure EditorImageFromFile(filename: string; var bmp: TBitmap; out ResType: TResTypeEnum; out PicCnt, EditorFrame: Integer);
 
 implementation
 
 uses
-  System.RTTI, System.SysUtils, System.UITypes, System.IniFiles;
+  System.RTTI, System.SysUtils, System.IniFiles;
 
 function ResTypeFromFile(filename: string): TResTypeEnum;
 var
@@ -120,7 +121,7 @@ begin
   Result := TRttiEnumerationType.GetValue<TResTypeEnum>(M);
 end;
 
-procedure decodeRLE(rle: PRLEHDR; rleData: TBufferedFileStream; var bitmap: TBitmap);
+procedure decodeRLE(rle: PRLEHDR; rleData: TBufferedFileStream; const INITransparentColor: TAlphaColor; var bitmap: TBitmap);
 var
   i, x, y : integer;
   c : byte;
@@ -158,7 +159,8 @@ begin
   //          g := (g * 259 + 33 ) shr 6; // floor(255/63 * G);
   //          b := (b * 527 + 23 ) shr 6; // floor(255/31 * B);
             end;
-            bmpData.SetPixel(X+rle.AdjX, Y+rle.AdjY, pxCol.Color);
+            if (pxCol.Color<>INITransparentColor) then
+              bmpData.SetPixel(X+rle.AdjX, Y+rle.AdjY, pxCol.Color);
             inc(x);
             dec(i);
           end;
@@ -319,7 +321,7 @@ begin
   end;
 end;
 
-procedure LayersFromFile(filename: string; clear: boolean; var bmpList: TBMPList);
+procedure LayersFromFile(filename: string; clear: boolean; var bmpList: TBMPList; out EditorFrame: Integer);
 var
   f : TBufferedFileStream;
   str : AnsiString;
@@ -334,6 +336,9 @@ var
   ini : TMemIniFile;
   imgwth, imghgt: Integer;
   iniData: TStringList;
+  transparentColor: TAlphaColor;
+  color: TAlphaColorRec;
+  rgbcolor: LongWord;
 begin
   if not FileExists(filename) then
     Exit;
@@ -348,7 +353,7 @@ begin
     f.Read( BB, SizeOf( BB ) );
     case resType of
       TResTypeEnum.UR: Exit;
-      TResTypeEnum.LC: Exit; // L := f.Size - f.Position;
+      TResTypeEnum.LC: Exit; // L := f.Size - f.Position;  // Should read INI from LC to get EditorFrame
     else
       f.Read( L, sizeof( L ) );
     end;
@@ -365,6 +370,13 @@ begin
           ini.SetStrings(iniData);
           imgwth := ini.ReadInteger('HEADER', 'ImageWidth', 0);
           imghgt := ini.ReadInteger('HEADER', 'ImageHeight', 0);
+          editorFrame := ini.ReadInteger('HEADER', 'EditorImage', 0);
+          rgbcolor := ini.ReadInteger('HEADER', 'TransparentColor', 16776960);
+          color.R := ( rgbcolor and $FF );
+          color.G := ( rgbcolor and $FF00 ) shr 8;
+          color.B := ( rgbcolor and $FF0000 ) shr 16;
+          color.A := $FF;
+          transparentColor := color.Color;
         finally
           ini.Free;
         end;
@@ -395,10 +407,95 @@ begin
         else
           bitmap := bmpList[i];
 //        bitmap.PixelFormat := TPixelFormat.BGR_565; // pf16bit;  // Should be bgr565
-        decodeRLE(p, f, bitmap);  // was digifxConvertRLE( dfx_hnd, p );
+        decodeRLE(p, f, transparentColor, bitmap);  // was digifxConvertRLE( dfx_hnd, p );
         if clear then bmpList.Add(bitmap);
         Inc( p );
       end;
+      FreeMem(lpSpr);
+    end;
+  finally
+    f.Free;
+  end;
+end;
+
+procedure EditorImageFromFile(filename: string; var bmp: TBitmap; out ResType: TResTypeEnum; out PicCnt, EditorFrame: Integer);
+var
+  offset: Integer;
+  f : TBufferedFileStream;
+  str : AnsiString;
+  BB : Word;
+  Size, RLESize : DWORD;
+  p : PRLEHDR;
+  lpSpr : PRLEHDR;
+  L : DWord;
+  ini : TMemIniFile;
+  imgwth, imghgt: Integer;
+  iniData: TStringList;
+  transparentColor: TAlphaColor;
+  color: TAlphaColorRec;
+  rgbcolor: LongWord;
+begin
+  if not FileExists(filename) then
+    Exit;
+  f := TBufferedFileStream.Create(filename, fmOpenRead);
+  try
+    f.Read( L , SizeOf( L ) );
+    if ( L<>$41584F50 ) then // 'POXA'
+      Exit;
+    resType := ResTypeFromStream(f);
+    f.Read( BB, SizeOf( BB ) );
+    case resType of
+      TResTypeEnum.UR: Exit;
+      TResTypeEnum.LC: Exit; // L := f.Size - f.Position;
+    else
+      f.Read( L, sizeof( L ) );
+    end;
+    SetLength( str, L );
+    f.Read( str[ 1 ], L );
+    // Get Image sizes.
+      iniData := TStringList.Create;
+      try
+        iniData.Text := str;
+        ini := TMemIniFile.Create('');
+        try
+          ini.SetStrings(iniData);
+          imgwth := ini.ReadInteger('HEADER', 'ImageWidth', 0);
+          imghgt := ini.ReadInteger('HEADER', 'ImageHeight', 0);
+          editorFrame := ini.ReadInteger('HEADER', 'EditorImage', 1);
+          rgbcolor := ini.ReadInteger('HEADER', 'TransparentColor', 16776960);
+          color.R := ( rgbcolor and $FF );
+          color.G := ( rgbcolor and $FF00 ) shr 8;
+          color.B := ( rgbcolor and $FF0000 ) shr 16;
+          color.A := $FF;
+          transparentColor := color.Color;
+        finally
+          ini.Free;
+        end;
+      finally
+        iniData.Free;
+      end;
+    //
+    f.Read( BB, SizeOf( BB ) );
+    if BB = $4242 then
+    begin
+      f.Read( PicCnt, SizeOf( PicCnt ) );
+      f.Read( RLESize, SizeOf( RLESize ) );
+      Size := PicCnt * SizeOf( RLEHDR );
+      GetMem( lpSpr, Size );
+      f.Read( lpSpr^, Size );
+
+      p := lpSpr;
+      offset := p.DataPtr;
+      if (EditorFrame = 0) or (EditorFrame>PicCnt) then
+        EditorFrame := 1;
+      Inc( p, editorFrame - 1 );
+//        p.DataPtr := p.DataPtr + DWORD( RelocOffset );
+      f.Position := f.Position + p.DataPtr - offset;
+//      bitmap := TBitmap.Create;
+      bmp.Width := Trunc(imgwth);
+      bmp.Height := Trunc(imghgt);
+//        bitmap.PixelFormat := TPixelFormat.BGR_565; // pf16bit;  // Should be bgr565
+      decodeRLE(p, f, transparentColor, bmp);  // was digifxConvertRLE( dfx_hnd, p );
       FreeMem(lpSpr);
     end;
   finally

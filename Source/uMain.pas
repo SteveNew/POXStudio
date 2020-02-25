@@ -46,7 +46,7 @@ uses
   FMX.TabControl, FMX.Ani, System.Generics.Collections, FMX.ListBox, FMX.Layouts,
   FMX.ListView.Types, FMX.ListView.Appearances, FMX.ListView.Adapters.Base,
   FMX.ListView, System.ImageList, FMX.ImgList, FMX.ExtCtrls, FMX.Menus,
-  SoAOS.FMX.POX.Utils;
+  SoAOS.FMX.POX.Utils, FMX.Colors;
 
 type
   TFrameList = class(TList<Integer>);
@@ -98,7 +98,6 @@ type
     btnImport: TButton;
     btnHelp: TButton;
     btnAbout: TButton;
-    languageStore: TLang;
     Image1: TImage;
     layHead: TCircle;
     layChest1: TCircle;
@@ -142,11 +141,13 @@ type
     lblFrameCnt: TLabel;
     lblFilename: TLabel;
     rbX4: TRadioButton;
-    imlResTypes: TImageList;
     imgRT: TImage;
     lvwPOXFiles: TListView;
     lvwPOXFilter: TListView;
     Image2: TImage;
+    rectBackground: TRectangle;
+    imlResTypes: TImageList;
+    cbBackgroundColor: TComboColorBox;
     procedure FormCreate(Sender: TObject);
     procedure btnSetPathClick(Sender: TObject);
     procedure btnExportClick(Sender: TObject);
@@ -171,6 +172,7 @@ type
       const AItem: TListViewItem);
     procedure btnAboutClick(Sender: TObject);
     procedure btnSaveClick(Sender: TObject);
+    procedure cbBackgroundColorChange(Sender: TObject);
   private
     { Private declarations }
     ArtLibPath: String;
@@ -186,6 +188,8 @@ type
 //    currentResTypeFilter: TResTypeFilter;
     frameMultiplier: integer;
     validLayers: string;
+    editorFrame: integer;
+    transparentColor: TAlphaColor;
 //    validLayers: Set of TLayers;
 //    visibleLayers: Set of TLayers;
     movements: TObjectDictionary<Byte, TFrameList>;
@@ -228,7 +232,8 @@ var
 implementation
 
 uses
-  System.IOUtils, System.IniFiles, System.RTTI, System.Threading, System.StrUtils, uAbout;
+  System.IOUtils, System.IniFiles, System.Threading, System.StrUtils, System.Rtti,
+  AG.Utils, uAbout;
 
 {$R *.fmx}
 
@@ -283,11 +288,27 @@ var
   files: TArray<string>;
   filn: string;
   POX: TPOXObject;
+  deflatePath: string;
+  filesFound: Integer;
 begin
   oldPath := ArtLibPath;
-  if SelectDirectory('Select your "ArtLib" location', '', ArtLibPath) then
+  if SelectDirectory('Select your "ArtLib" location or the location of the .AG files', '', ArtLibPath) then
   begin
     // Populate FilesDictionary<string, POXRec>
+
+    // Deflate *.ag file - if valid - and set ArtLibPath = temp
+    files := TDirectory.GetFiles(ArtLibPath, '*.ag', TSearchOption.soTopDirectoryOnly);
+    if length(files)>0 then
+    begin
+      deflatePath := IncludeTrailingPathDelimiter(TPath.GetHomePath)+'POXStudioTemp';
+      if ForceDirectories(deflatePath) then
+      begin
+        for filn in files do
+          Deflate('POXA', '.pox', filn, IncludeTrailingPathDelimiter(deflatePath)+TPath.GetFileNameWithoutExtension(filn) , filesFound);
+        ArtLibPath := deflatePath;
+      end;
+    end;
+
     files := TDirectory.GetFiles(ArtLibPath, '*.pox', TSearchOption.soAllDirectories);
     ab := Length(ArtLibPath)+1;
     POXList.Clear;
@@ -314,6 +335,11 @@ begin
   if Assigned(bmpList) then
     TBMPList(bmpList).Free;
   bmpList := TBMPList.Create;
+end;
+
+procedure TfrmMain.cbBackgroundColorChange(Sender: TObject);
+begin
+  rectBackground.Fill.Color := cbBackgroundColor.Color;
 end;
 
 procedure TfrmMain.FormCreate(Sender: TObject);
@@ -441,6 +467,8 @@ begin
     memINIData.Lines.Text := str;  // IniFile Data
     parseINI(memINIData.Lines);
 
+    cbBackgroundColor.Color := transparentColor;
+
     f.Read( BB, SizeOf( BB ) );
     if BB = $4242 then
     begin
@@ -461,7 +489,7 @@ begin
 //        bitmap.PixelFormat := TPixelFormat.BGR_565; // pf16bit;  // Should be bgr565
 //        p.DataPtr := int32( PChar( p.DataPtr + DWORD( RelocOffset ) ) );
 
-        decodeRLE(p, f, bitmap);  // was digifxConvertRLE( dfx_hnd, p );
+        decodeRLE(p, f, transparentColor, bitmap);  // was digifxConvertRLE( dfx_hnd, p );
 
         bmpList.Add(bitmap);
         Inc( p );
@@ -487,7 +515,7 @@ procedure TfrmMain.lvwPOXFilesItemClick(const Sender: TObject;
 begin
   playFrames.Stop;
   memINIData.Lines.Clear;
-  rbX1.IsChecked := True;
+//  rbX1.IsChecked := True;
   tkbFrames.Value := 0;
 
   LoadPOXFile(ArtLibPath+AItem.Detail);
@@ -496,7 +524,7 @@ begin
   updateLayers;
   UpdateBMPListBasedonVisibleLayers;
   if bmpList.Count>0 then // non-LC
-    imgRLE.Bitmap := bmpList[0]
+    imgRLE.Bitmap := bmpList[editorFrame-1]
   else
     imgRLE.Bitmap := nil;
   btnExport.Enabled := True;
@@ -533,6 +561,8 @@ var
   ini: TMemIniFile;
   actionStr: string;
   W: Integer;
+  rgbcolor: LongWord;
+  color: TAlphaColorRec;
 
   procedure addFrames;
   var
@@ -581,6 +611,15 @@ begin
     imgRLE.Height := ini.ReadInteger('HEADER', 'ImageHeight', 0);
     frameMultiplier := ini.ReadInteger('HEADER','FrameMultiplier', 1);
     // triggerframes
+    editorFrame := ini.ReadInteger('HEADER', 'EditorImage', 1);
+    if editorFrame=0 then // LC can be 0
+      editorFrame := 1;
+    rgbcolor := ini.ReadInteger('HEADER', 'TransparentColor', 16776960);
+    color.R := ( rgbcolor and $FF );
+    color.G := ( rgbcolor and $FF00 ) shr 8;
+    color.B := ( rgbcolor and $FF0000 ) shr 16;
+    color.A := $FF;
+    transparentColor := color.Color;
     validLayers := ini.ReadString('HEADER', 'ValidLayers', ''); // LL
     ini.ReadSectionValues('Layers', layersSL); // LC
 
@@ -603,12 +642,12 @@ end;
 
 procedure TfrmMain.rbX3Change(Sender: TObject);
 begin
-  zoom(3.0);
+  zoom(4.0);
 end;
 
 procedure TfrmMain.rbX4Change(Sender: TObject);
 begin
-  zoom(4.0);
+  zoom(8.0);
 end;
 
 function TfrmMain.SavePOXFile(filename: string): Boolean;
@@ -746,46 +785,46 @@ begin
     if layersSL.Values['naked']<>'' then
     begin
       ClearBMPList;
-      LayersFromFile(TPath.ChangeExtension(ArtLibPath+LayeredRelativePath+layersSL.Values['naked'], 'pox'), true, bmpList);
+      LayersFromFile(TPath.ChangeExtension(ArtLibPath+LayeredRelativePath+layersSL.Values['naked'], 'pox'), true, bmpList, editorFrame);
       LayersPath := ExtractFilePath(ArtLibPath+LayeredRelativePath+layersSL.Values['naked']);
       // Add BMPLIst to ObjectList ....
       if (layersSL.Values['head']<>'') then
-        LayersFromFile(TPath.ChangeExtension(ArtLibPath+LayeredRelativePath+layersSL.Values['head'], 'pox'), false, bmpList);
+        LayersFromFile(TPath.ChangeExtension(ArtLibPath+LayeredRelativePath+layersSL.Values['head'], 'pox'), false, bmpList, editorFrame);
       if (layersSL.Values['feet']<>'') then
-        LayersFromFile(TPath.ChangeExtension(LayersPath+layersSL.Values['feet'], 'pox'), false, bmpList);
+        LayersFromFile(TPath.ChangeExtension(LayersPath+layersSL.Values['feet'], 'pox'), false, bmpList, editorFrame);
 
       if (layersSL.Values['helmet']<>'') and layHead.Selected then
-        LayersFromFile(TPath.ChangeExtension(LayersPath+layersSL.Values['helmet'], 'pox'), false, bmpList);
+        LayersFromFile(TPath.ChangeExtension(LayersPath+layersSL.Values['helmet'], 'pox'), false, bmpList, editorFrame);
       if (layersSL.Values['chest1']<>'') and layChest1.Selected then
-        LayersFromFile(TPath.ChangeExtension(LayersPath+layersSL.Values['chest1'], 'pox'), false, bmpList);
+        LayersFromFile(TPath.ChangeExtension(LayersPath+layersSL.Values['chest1'], 'pox'), false, bmpList, editorFrame);
       if (layersSL.Values['chest2']<>'') and layChest2.Selected then
-        LayersFromFile(TPath.ChangeExtension(LayersPath+layersSL.Values['chest2'], 'pox'), false, bmpList);
+        LayersFromFile(TPath.ChangeExtension(LayersPath+layersSL.Values['chest2'], 'pox'), false, bmpList, editorFrame);
       if (layersSL.Values['chest3']<>'') and layChest3.Selected then
-        LayersFromFile(TPath.ChangeExtension(LayersPath+layersSL.Values['chest3'], 'pox'), false, bmpList);
+        LayersFromFile(TPath.ChangeExtension(LayersPath+layersSL.Values['chest3'], 'pox'), false, bmpList, editorFrame);
       if (layersSL.Values['leg1']<>'') and layLeg1.Selected then
-        LayersFromFile(TPath.ChangeExtension(LayersPath+layersSL.Values['leg1'], 'pox'), false, bmpList);
+        LayersFromFile(TPath.ChangeExtension(LayersPath+layersSL.Values['leg1'], 'pox'), false, bmpList, editorFrame);
       if (layersSL.Values['leg2']<>'') and layLeg2.Selected then
-        LayersFromFile(TPath.ChangeExtension(LayersPath+layersSL.Values['leg2'], 'pox'), false, bmpList);
+        LayersFromFile(TPath.ChangeExtension(LayersPath+layersSL.Values['leg2'], 'pox'), false, bmpList, editorFrame);
       if (layersSL.Values['boot']<>'') and layFeet.Selected then
-        LayersFromFile(TPath.ChangeExtension(LayersPath+layersSL.Values['boot'], 'pox'), false, bmpList);
+        LayersFromFile(TPath.ChangeExtension(LayersPath+layersSL.Values['boot'], 'pox'), false, bmpList, editorFrame);
       if (layersSL.Values['outer']<>'') and layOuter.Selected then
-        LayersFromFile(TPath.ChangeExtension(LayersPath+layersSL.Values['outer'], 'pox'), false, bmpList);
+        LayersFromFile(TPath.ChangeExtension(LayersPath+layersSL.Values['outer'], 'pox'), false, bmpList, editorFrame);
       if (layersSL.Values['belt']<>'') and layBelt.Selected then
-        LayersFromFile(TPath.ChangeExtension(LayersPath+layersSL.Values['belt'], 'pox'), false, bmpList);
+        LayersFromFile(TPath.ChangeExtension(LayersPath+layersSL.Values['belt'], 'pox'), false, bmpList, editorFrame);
       if (layersSL.Values['arm']<>'') and layArm.Selected then
-        LayersFromFile(TPath.ChangeExtension(LayersPath+layersSL.Values['arm'], 'pox'), false, bmpList);
+        LayersFromFile(TPath.ChangeExtension(LayersPath+layersSL.Values['arm'], 'pox'), false, bmpList, editorFrame);
       if (layersSL.Values['gauntlet']<>'') and layGauntlet.Selected then
-        LayersFromFile(TPath.ChangeExtension(LayersPath+layersSL.Values['gauntlet'], 'pox'), false, bmpList);
+        LayersFromFile(TPath.ChangeExtension(LayersPath+layersSL.Values['gauntlet'], 'pox'), false, bmpList, editorFrame);
       if (layersSL.Values['misc1']<>'') and layMisc1.Selected then
-        LayersFromFile(TPath.ChangeExtension(LayersPath+layersSL.Values['misc1'], 'pox'), false, bmpList);
+        LayersFromFile(TPath.ChangeExtension(LayersPath+layersSL.Values['misc1'], 'pox'), false, bmpList, editorFrame);
       if (layersSL.Values['misc2']<>'') and layMisc2.Selected then
-        LayersFromFile(TPath.ChangeExtension(LayersPath+layersSL.Values['misc2'], 'pox'), false, bmpList);
+        LayersFromFile(TPath.ChangeExtension(LayersPath+layersSL.Values['misc2'], 'pox'), false, bmpList, editorFrame);
       if (layersSL.Values['misc3']<>'') and layMisc3.Selected then
-        LayersFromFile(TPath.ChangeExtension(LayersPath+layersSL.Values['misc3'], 'pox'), false, bmpList);
+        LayersFromFile(TPath.ChangeExtension(LayersPath+layersSL.Values['misc3'], 'pox'), false, bmpList, editorFrame);
       if (layersSL.Values['weapon']<>'') and layWeapon.Selected then
-        LayersFromFile(TPath.ChangeExtension(LayersPath+layersSL.Values['weapon'], 'pox'), false, bmpList);
+        LayersFromFile(TPath.ChangeExtension(LayersPath+layersSL.Values['weapon'], 'pox'), false, bmpList, editorFrame);
       if (layersSL.Values['shield']<>'') and layShield.Selected then
-        LayersFromFile(TPath.ChangeExtension(LayersPath+layersSL.Values['shield'], 'pox'), false, bmpList);
+        LayersFromFile(TPath.ChangeExtension(LayersPath+layersSL.Values['shield'], 'pox'), false, bmpList, editorFrame);
     end;
   end;
 end;
@@ -889,7 +928,11 @@ begin
   if movements.TryGetValue((currentActionIdx*10)+currentDirection, frames) then
   begin
     tkbFrames.Max := frames.Count-1;
-    imgRLE.Bitmap := bmpList[frames[Trunc(tkbFrames.Value)]-1];
+    try
+      imgRLE.Bitmap := bmpList[frames[Trunc(tkbFrames.Value)]-1];
+    except
+      imgRLE.Bitmap := bmpList[0];
+    end;
   end
   else
   begin
@@ -898,7 +941,7 @@ begin
   end;
   playFrames.StartValue := 0;
   playFrames.StopValue := tkbFrames.Max;
-  playFrames.Duration := tkbFrames.Max * 0.1 * frameMultiplier; // 100 msec per frame
+  playFrames.Duration := tkbFrames.Max * (0.1 * frameMultiplier); // 100 msec per frame
   sbPlay.Enabled := tkbFrames.Max <> tkbFrames.Min;
 end;
 
